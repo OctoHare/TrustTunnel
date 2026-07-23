@@ -16,7 +16,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Переводим имя репозитория в нижний регистр (octohare/trusttunnel)
       - name: Lowercase repository name
         run: |
           echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
@@ -37,9 +36,6 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          # Используем приведенное к нижнему регистру имя из env.REPO_LOWER
-          tags: |
-            ghcr.io/${{ env.REPO_LOWER }}:latest
-            ghcr.io/${{ env.REPO_LOWER }}:${{ github.sha }}
+          tags: ghcr.io/${{ env.REPO_LOWER }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

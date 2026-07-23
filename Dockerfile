@@ -1,42 +1,30 @@
 # syntax=docker/dockerfile:1
-FROM python:3.13-slim-bullseye AS build
-ARG ENDPOINT_DIR_NAME="TrustTunnel"
-ARG RUST_DEFAULT_VERSION="1.85"
-WORKDIR /home
-# Install needed packets
-RUN apt update && \
-    apt install -y build-essential cmake curl make git libclang-dev
-# Install Rust and Cargo
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_DEFAULT_VERSION -y
-ENV PATH="/root/.cargo/bin:$PATH"
-# Copy source files
-WORKDIR $ENDPOINT_DIR_NAME
-COPY deeplink/ ./deeplink
-COPY endpoint/ ./endpoint
-COPY lib/ ./lib
-COPY macros/ ./macros
-COPY tools/ ./tools
-COPY Cargo.toml Cargo.lock rust-toolchain.toml Makefile ./
-# Build
-RUN make endpoint/build
-RUN make endpoint/build-wizard
+FROM debian:bookworm-slim
 
-# Copy binaries
-FROM debian:bookworm-slim AS trusttunnel-endpoint
-ARG ENDPOINT_DIR_NAME="TrustTunnel"
-ARG LOG_LEVEL="info"
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates iproute2 && rm -rf /var/lib/apt/lists/*
-COPY --from=build /home/$ENDPOINT_DIR_NAME/target/release/setup_wizard /bin/
-COPY --from=build /home/$ENDPOINT_DIR_NAME/target/release/trusttunnel_endpoint /bin/
-COPY --chmod=755  /docker-entrypoint.sh /scripts/
+# Указываем версию TrustTunnel, которую нужно скачать
+ARG TT_VERSION="0.1.0"
+ARG TARGETARCH
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tar iproute2 && rm -rf /var/lib/apt/lists/*
+
+# Скачиваем официальный скомпилированный релиз под нужную архитектуру (amd64 / arm64)
+RUN set -eux; \
+    case "$TARGETARCH" in \
+        amd64) TT_ARCH="x86_64" ;; \
+        arm64) TT_ARCH="aarch64" ;; \
+        *) echo "Unsupported TARGETARCH: $TARGETARCH"; exit 1 ;; \
+    esac; \
+    RELEASE_FILE="trusttunnel-v${TT_VERSION}-linux-${TT_ARCH}.tar.gz"; \
+    curl -fsSL "https://github.com/TrustTunnel/TrustTunnel/releases/download/v${TT_VERSION}/${RELEASE_FILE}" -o /tmp/release.tar.gz; \
+    mkdir -p /tmp/release; \
+    tar -xzf /tmp/release.tar.gz -C /tmp/release; \
+    cp /tmp/release/*/trusttunnel_endpoint /bin/; \
+    cp /tmp/release/*/setup_wizard /bin/; \
+    rm -rf /tmp/release*
+
+COPY --chmod=755 /docker-entrypoint.sh /scripts/
+
 WORKDIR /trusttunnel_endpoint
-
-# Persist endpoint state/configuration under this directory:
-# - vpn.toml
-# - hosts.toml
-# - credentials.toml
-# - rules.toml
-# - certs/
 VOLUME /trusttunnel_endpoint/
-ENTRYPOINT ["/scripts/docker-entrypoint.sh"]
 
+ENTRYPOINT ["/scripts/docker-entrypoint.sh"]

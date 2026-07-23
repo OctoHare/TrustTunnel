@@ -1,13 +1,12 @@
 # syntax=docker/dockerfile:1
 FROM debian:bookworm-slim
 
-# Указываем версию TrustTunnel, которую нужно скачать
-ARG TT_VERSION="0.1.0"
+# Указываем реальную версию из релизов GitHub
+ARG TT_VERSION="1.0.33"
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tar iproute2 && rm -rf /var/lib/apt/lists/*
 
-# Скачиваем официальный скомпилированный релиз под нужную архитектуру (amd64 / arm64)
 RUN set -eux; \
     case "$TARGETARCH" in \
         amd64) TT_ARCH="x86_64" ;; \
@@ -18,8 +17,9 @@ RUN set -eux; \
     curl -fsSL "https://github.com/TrustTunnel/TrustTunnel/releases/download/v${TT_VERSION}/${RELEASE_FILE}" -o /tmp/release.tar.gz; \
     mkdir -p /tmp/release; \
     tar -xzf /tmp/release.tar.gz -C /tmp/release; \
-    cp /tmp/release/*/trusttunnel_endpoint /bin/; \
-    cp /tmp/release/*/setup_wizard /bin/; \
+    # Копируем бинарники (учитывая возможную вложенность папок в архиве)
+    cp /tmp/release/*/trusttunnel_endpoint /bin/ 2>/dev/null || cp /tmp/release/trusttunnel_endpoint /bin/; \
+    cp /tmp/release/*/setup_wizard /bin/ 2>/dev/null || cp /tmp/release/setup_wizard /bin/; \
     rm -rf /tmp/release*
 
 COPY --chmod=755 /docker-entrypoint.sh /scripts/
